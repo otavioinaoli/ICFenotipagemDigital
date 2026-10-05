@@ -199,7 +199,7 @@ struct plant{
     }
 };
 
-Mat ler_imagem(string nome){
+Mat ler_imagem(string nome, string pasta){
     //Lendo imagem original
     Mat img = imread(nome);
 
@@ -208,12 +208,12 @@ Mat ler_imagem(string nome){
         return Mat();;
     }
 
-    imwrite("resultados/original.jpeg", img);
+    imwrite(pasta + "original.jpeg", img);
 
     return img;
 }
 
-Mat conversao_cinza(Mat img){
+Mat conversao_cinza(Mat img, string pasta){
     Mat imgFloat;
     img.convertTo(imgFloat, CV_32F);
 
@@ -231,12 +231,12 @@ Mat conversao_cinza(Mat img){
 
     exgNorm.convertTo(exgNorm, CV_8U);
 
-    imwrite("resultados/exg.png", exgNorm);
+    imwrite(pasta + "exg.png", exgNorm);
 
     return exgNorm;
 }
 
-Mat convesao_binaria(Mat exg){   
+Mat convesao_binaria(Mat exg, string pasta){   
     Mat binary;
 
     threshold(exg, binary, 0, 255, THRESH_BINARY | THRESH_OTSU);
@@ -246,12 +246,12 @@ Mat convesao_binaria(Mat exg){
     // Pinta uma borda preta em volta da imagem para desconectar do limite que tava bugando a identificação da base
     rectangle(binary, Point(0,0), Point(binary.cols-1, binary.rows-1), Scalar(0), borderSize);
 
-    imwrite("resultados/binary.png", binary);
+    imwrite(pasta + "binary.png", binary);
 
     return binary;
 }
 
-Mat preenchimento_buracos(Mat binary) {
+Mat preenchimento_buracos(Mat binary, string pasta) {
     Mat inversa;
     bitwise_not(binary, inversa);
 
@@ -260,28 +260,29 @@ Mat preenchimento_buracos(Mat binary) {
     Mat preenchida;
     bitwise_or(binary, inversa, preenchida);
 
-    imwrite("resultados/preenchida.png", preenchida);
+    imwrite(pasta + "preenchida.png", preenchida);
 
     return preenchida;
 }
 
-Mat extracao_esqueleto(Mat binary){
+Mat extracao_esqueleto(Mat binary, string pasta){
     Mat skeleton;
     thinning(binary, skeleton, cv::ximgproc::THINNING_ZHANGSUEN);
     //thinning(binary, skeleton, cv::ximgproc::THINNING_GUOHALL);
     
-    imwrite("resultados/esqueleto.png", skeleton);
+    imwrite(pasta + "esqueleto.png", skeleton);
 
     return skeleton;
 }
 
-Mat podamento(Mat skeleton, int limiar){
+Mat podamento(Mat skeleton, int limiar, string pasta){
     for(int l = 0; l < limiar; l++){
         vector<Point> endPointsRemoviveis;
         // Arrays para percorrer os 8 vizinhos em sentido horário ao redor do pixel central (j, i)
         // Começando de cima (0, -1) e girando...
         int dx[] = { 0,  1,  1,  1,  0, -1, -1, -1};
         int dy[] = {-1, -1,  0,  1,  1,  1,  0, -1};
+
         for (int i = 1; i < skeleton.rows - 1; i++) {
             for (int j = 1; j < skeleton.cols - 1; j++) {
 
@@ -291,7 +292,7 @@ Mat podamento(Mat skeleton, int limiar){
 
                 int transicoes = 0;
 
-                 // Percorre os 8 vizinhos em círculo
+                // Percorre os 8 vizinhos em círculo
                 for (int k = 0; k < 8; k++) {
                     // k é o vizinho atual, next_k é o próximo vizinho no círculo
                     int next_k = (k + 1) % 8;
@@ -311,17 +312,18 @@ Mat podamento(Mat skeleton, int limiar){
                 }
             }
         }
+
         for(long unsigned int i = 0; i < endPointsRemoviveis.size(); i++){
             skeleton.at<uchar>(endPointsRemoviveis[i].y, endPointsRemoviveis[i].x) = 0;
         }    
     }
     
-    imwrite("resultados/esqueletoPodado.png", skeleton);
+    imwrite(pasta + "esqueletoPodado.png", skeleton);
 
     return skeleton;
 }
 
-Mat contagem_branchpoints_endpoints(Mat skeleton, vector<Point> &branchPoints, vector<Point> &endPoints){
+Mat contagem_branchpoints_endpoints(Mat skeleton, vector<Point> &branchPoints, vector<Point> &endPoints,string pasta){
     Mat resultado;
     cvtColor(skeleton, resultado, COLOR_GRAY2BGR);
 
@@ -342,13 +344,11 @@ Mat contagem_branchpoints_endpoints(Mat skeleton, vector<Point> &branchPoints, v
 
             // Percorre os 8 vizinhos em círculo
             for (int k = 0; k < 8; k++) {
-                // k é o vizinho atual, next_k é o próximo vizinho no círculo
                 int next_k = (k + 1) % 8;
 
                 uchar p1 = skeleton.at<uchar>(i + dy[k], j + dx[k]);
                 uchar p2 = skeleton.at<uchar>(i + dy[next_k], j + dx[next_k]);
 
-                // Conta apenas as transições de Fundo (0) para Esqueleto (255)
                 if (p1 == 0 && p2 == 255) {
                     transicoes++;
                 }
@@ -368,19 +368,19 @@ Mat contagem_branchpoints_endpoints(Mat skeleton, vector<Point> &branchPoints, v
         }
     }
 
-    imwrite("resultados/branchpoints.png", resultado);
+    imwrite(pasta + "branchpoints.png", resultado);
 
     return resultado;
 }
 
-double calcular_escala(string nome) {
-    Mat img = ler_imagem(nome);
+double calcular_escala(Mat regua) {
+    string pasta = "regua/";
 
-    Mat exg = conversao_cinza(img);
+    Mat exg = conversao_cinza(regua, pasta);
 
-    Mat binary = convesao_binaria(exg);
+    Mat binary = convesao_binaria(exg, pasta);
 
-    Mat preenchida = preenchimento_buracos(binary);
+    Mat preenchida = preenchimento_buracos(binary, pasta);
 
     vector<vector<Point>> contours;
     vector<Vec4i> hierarchy;
@@ -389,37 +389,103 @@ double calcular_escala(string nome) {
                  RETR_EXTERNAL, CHAIN_APPROX_SIMPLE);
 
     sort(contours.begin(), contours.end(),
-        [](const vector<Point>& a, const vector<Point>& b) {
-            return contourArea(a) > contourArea(b);
-        });
+         [](const vector<Point>& a, const vector<Point>& b) {
+             return contourArea(a) > contourArea(b);
+         });
 
     return 84 / arcLength(contours[0], true);
 }
 
+pair<Mat, Mat> separar_imagem(Mat original){ 
+    vector<vector<Point>> contours; 
+    vector<Vec4i> hierarchy; 
+
+    Mat exg = conversao_cinza(original, "pasta");
+    Mat binary = convesao_binaria(exg, "pasta");
+
+    findContours(binary, contours, hierarchy,
+                  RETR_EXTERNAL, CHAIN_APPROX_SIMPLE);
+
+    int indiceRegua = -1;
+    int indicePlanta = -1;
+
+    double maiorArea = 0;
+
+    for(int i = 0; i < contours.size(); i++){
+        Rect retangulo = boundingRect(contours[i]);
+
+        int largura = retangulo.width;
+        int altura = retangulo.height;
+        int area = largura * altura;
+
+        if(altura > largura * 2 && area > 10000){
+            indiceRegua = i;
+        }
+    }
+
+    for(int i = 0; i < contours.size(); i++){
+
+        if(i == indiceRegua)
+            continue;
+
+        Rect retangulo = boundingRect(contours[i]);
+        int area = retangulo.width * retangulo.height;
+
+        if(area > maiorArea){
+            maiorArea = area;
+            indicePlanta = i;
+        }
+    }
+
+    if(indiceRegua == -1 || indicePlanta == -1){
+        return {Mat(), Mat()};
+    }
+
+    Rect retanguloRegua = boundingRect(contours[indiceRegua]);
+    Rect retanguloPlanta = boundingRect(contours[indicePlanta]);
+
+    Mat regua = original(retanguloRegua).clone();
+    Mat planta = original(retanguloPlanta).clone();
+
+    rectangle(original, retanguloRegua, Scalar(0, 0, 255), 3);
+    rectangle(original, retanguloPlanta, Scalar(0, 255, 0), 3);
+
+    imwrite("separacao.jpg", original);
+
+    return make_pair(regua, planta);
+}
+
 int main() {
-    Mat img = ler_imagem("regua.jpg");
+    Mat img = ler_imagem("original.jpg", "planta/");
 
-    Mat exg = conversao_cinza(img);
+    auto separadas = separar_imagem(img);
+    Mat planta = separadas.second;
+    imwrite("planta/planta.jpg", planta);
 
-    Mat binary = convesao_binaria(exg);
+    Mat exg = conversao_cinza(planta, "planta/");
 
-    Mat preenchida = preenchimento_buracos(binary);
+    Mat binary = convesao_binaria(exg, "planta/");
 
-    Mat skeleton = extracao_esqueleto(preenchida);
+    Mat preenchida = preenchimento_buracos(binary, "planta/");
+
+    Mat skeleton = extracao_esqueleto(preenchida, "planta/");
     
     int limiar = 45;
-    skeleton = podamento(skeleton, limiar);
+    skeleton = podamento(skeleton, limiar, "planta/");
 
     vector<Point> branchPoints;
     vector<Point> endPoints;
-    contagem_branchpoints_endpoints(skeleton, branchPoints, endPoints);
+    contagem_branchpoints_endpoints(skeleton, branchPoints, endPoints, "planta/");
 
     //Montando grafo a partir da 
-    double escala = calcular_escala("regua.jpg");
+    Mat regua = separadas.first;
+    imwrite("regua/regua.jpg", regua);
+    double escala = calcular_escala(regua);
 
     plant p = plant(branchPoints, endPoints, skeleton);
     p.desenhar(img.cols, img.rows);
-    vector<double> comp =  p.extrair_comprimento_folhas(escala, limiar);
+
+    vector<double> comp = p.extrair_comprimento_folhas(escala, limiar);
 
     for(auto i : comp){
         cout << "O comprimento da folha é: " << i << "cm" << endl;
