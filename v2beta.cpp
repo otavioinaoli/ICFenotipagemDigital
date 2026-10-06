@@ -1,5 +1,3 @@
-
-
 #include <opencv2/opencv.hpp>
 #include <opencv2/ximgproc.hpp>
 #include <iostream>
@@ -374,26 +372,15 @@ Mat contagem_branchpoints_endpoints(Mat skeleton, vector<Point> &branchPoints, v
 }
 
 double calcular_escala(Mat regua) {
-    string pasta = "regua/";
+    Mat regua_rotacionada;
+    rotate(regua, regua_rotacionada, ROTATE_90_COUNTERCLOCKWISE);
 
-    Mat exg = conversao_cinza(regua, pasta);
+    Mat regua_padding;
+    copyMakeBorder(regua_rotacionada, regua_padding, 60, 60, 60, 60, BORDER_CONSTANT, Scalar(255, 255, 255));
 
-    Mat binary = convesao_binaria(exg, pasta);
+    imwrite("regua_processada.jpg", regua_padding);
 
-    Mat preenchida = preenchimento_buracos(binary, pasta);
-
-    vector<vector<Point>> contours;
-    vector<Vec4i> hierarchy;
-
-    findContours(preenchida, contours, hierarchy,
-                 RETR_EXTERNAL, CHAIN_APPROX_SIMPLE);
-
-    sort(contours.begin(), contours.end(),
-         [](const vector<Point>& a, const vector<Point>& b) {
-             return contourArea(a) > contourArea(b);
-         });
-
-    return 84 / arcLength(contours[0], true);
+    return 0.0;
 }
 
 pair<Mat, Mat> separar_imagem(Mat original){ 
@@ -450,7 +437,6 @@ pair<Mat, Mat> separar_imagem(Mat original){
     rectangle(original, retanguloRegua, Scalar(0, 0, 255), 3);
     rectangle(original, retanguloPlanta, Scalar(0, 255, 0), 3);
 
-    imwrite("separacao.jpg", original);
 
     return make_pair(regua, planta);
 }
